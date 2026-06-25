@@ -41,7 +41,7 @@ const suggestions = [
   { label: 'Gradle cache', target: '~/.gradle/caches', reason: 'Rebuildable Android/Gradle cache.' },
   { label: 'Dart analysis cache', target: '~/.dartServer', reason: 'Rebuildable Dart analyzer cache.' },
   { label: 'Codex runtime cache', target: '~/.cache/codex-runtimes', reason: 'Rebuildable tool runtime cache.' },
-  { label: 'Homebrew downloads', target: '~/Library/Caches/Homebrew', reason: 'Downloaded bottles/installers.' },
+  { label: 'Homebrew downloads', target: '~/Library/Caches/Homebrew/downloads', reason: 'Re-downloadable Homebrew bottles/installers.' },
   { label: 'VS Code updater cache', target: '~/Library/Caches/com.microsoft.VSCode.ShipIt', reason: 'Old VS Code updates.' },
   { label: 'Telegram updater cache', target: '~/Library/Caches/ru.keepcoder.Telegram', reason: 'Old Telegram update zips.' },
   { label: 'Stremio cache', target: '~/Library/Application Support/stremio-server/stremio-cache', reason: 'Rebuildable Stremio streaming cache.' },
@@ -123,13 +123,16 @@ let returnStack = [];
 let pendingTrashPath = null;
 let pendingDeleteMode = 'trash';
 let scanPreviewRows = [];
+let scanResultRows = [];
 let scanProgress = { root: '', checked: 0, found: 0, doneRoots: 0, totalRoots: 0 };
 let scanState = 'idle';
 let activeScanKey = null;
+let selectedScanKey = null;
 const screenCache = new Map();
 
 readline.emitKeypressEvents(process.stdin);
 if (process.stdin.isTTY) process.stdin.setRawMode(true);
+if (process.stdout.isTTY) process.stdout.write('\x1b[?1049h\x1b[?25l');
 process.stdin.on('keypress', async (input, key) => {
   const keyValue = (key?.name || key?.sequence || input || '').toLowerCase();
   const isDeleteKey = keyValue === 'd' || key?.name === 'delete' || key?.name === 'backspace' || key?.sequence === '\x7f';
@@ -163,6 +166,47 @@ process.stdin.on('keypress', async (input, key) => {
     render();
     return;
   }
+  if (busy && key.name === 'up') {
+    cursor = Math.max(0, cursor - 1);
+    selectedScanKey = rowKey(getBusyItemAtCursor());
+    render();
+    return;
+  }
+  if (busy && key.name === 'down') {
+    cursor = Math.min(Math.max(0, scanResultRows.length - 1), cursor + 1);
+    selectedScanKey = rowKey(getBusyItemAtCursor());
+    render();
+    return;
+  }
+  if (busy && key.name === 'pageup') {
+    cursor = Math.max(0, cursor - pageSize());
+    selectedScanKey = rowKey(getBusyItemAtCursor());
+    render();
+    return;
+  }
+  if (busy && key.name === 'pagedown') {
+    cursor = Math.min(Math.max(0, scanResultRows.length - 1), cursor + pageSize());
+    selectedScanKey = rowKey(getBusyItemAtCursor());
+    render();
+    return;
+  }
+  if (busy && key.name === 'home') {
+    cursor = 0;
+    selectedScanKey = rowKey(getBusyItemAtCursor());
+    render();
+    return;
+  }
+  if (busy && key.name === 'end') {
+    cursor = Math.max(0, scanResultRows.length - 1);
+    selectedScanKey = rowKey(getBusyItemAtCursor());
+    render();
+    return;
+  }
+  if (busy && key.name === 'return') {
+    pauseScan('Đã tạm dừng quét');
+    await activate(getActiveItem());
+    return;
+  }
   if (busy && keyValue === 'q') {
     await backScreen();
     render();
@@ -180,6 +224,10 @@ process.stdin.on('keypress', async (input, key) => {
   if (busy) return;
   if (key.name === 'up') cursor = Math.max(0, cursor - 1);
   else if (key.name === 'down') cursor = Math.min(rows.length - 1, cursor + 1);
+  else if (key.name === 'pageup') cursor = Math.max(0, cursor - pageSize());
+  else if (key.name === 'pagedown') cursor = Math.min(rows.length - 1, cursor + pageSize());
+  else if (key.name === 'home') cursor = 0;
+  else if (key.name === 'end') cursor = Math.max(0, rows.length - 1);
   else if (key.name === 'return') await activate();
   else if (isDeleteKey) await deleteSelected();
   else if (keyValue === 'r') await loadScreen(screen, { force: true });
@@ -238,6 +286,7 @@ async function loadScreen(next, options = {}) {
   currentAbortController = new AbortController();
   rows = [row('Đang quét dữ liệu...', 'p/Space tạm dừng · q quay lại · Esc thoát', {})];
   scanPreviewRows = [];
+  scanResultRows = [];
   scanProgress = { root: '', checked: 0, found: 0, doneRoots: 0, totalRoots: 0 };
   startSpinner();
   render();
@@ -266,8 +315,7 @@ async function loadScreen(next, options = {}) {
   }
 }
 
-async function activate() {
-  const item = rows[cursor];
+async function activate(item = getActiveItem()) {
   if (!item) return;
   if (item.action === 'open-settings') return openFullDiskAccessSettings();
   if (item.action === 'recheck') return boot();
@@ -289,12 +337,18 @@ async function activate() {
 }
 
 async function deleteSelected() {
-  const item = rows[cursor];
+  const item = getActiveItem();
   if (!item?.path) {
     status = 'Mục này không xoá được.';
     return;
   }
   await trashPath(item.path);
+}
+
+function getActiveItem() {
+  if (busy && scanResultRows.length) return scanResultRows[cursor];
+  if (busy && scanPreviewRows.length) return scanPreviewRows[cursor];
+  return rows[cursor];
 }
 
 async function backScreen() {
@@ -344,15 +398,11 @@ async function suggestionRows() {
     const now = Date.now();
     if (now - lastPreviewAt < 120) return;
     lastPreviewAt = now;
-    const top = found.sort((a, b) => b.size - a.size).slice(0, 5);
-    scanPreviewRows = [
-      row(
-        'Đang quét gợi ý dọn dẹp...',
-        `Mục ${Math.min(scanProgress.doneRoots + 1, scanProgress.totalRoots)}/${scanProgress.totalRoots}  ·  ${scanProgress.root || 'đang chạy'}  ·  thấy ${scanProgress.found} mục có dữ liệu`,
-        {},
-      ),
-      ...(top.length ? top : [row('Chưa có kết quả', 'Đang tính dung lượng mục hiện tại', {})]),
-    ];
+    const sorted = found.sort((a, b) => b.size - a.size);
+    scanResultRows = sorted;
+    const top = sorted.slice(0, pageSize());
+    scanPreviewRows = top.length ? top : [row('Chưa có kết quả', `Đang tính dung lượng: ${scanProgress.root || 'đang chạy'}`, {})];
+    syncBusySelection();
     render();
   };
 
@@ -411,15 +461,11 @@ async function topFolderRows() {
     const now = Date.now();
     if (now - lastPreviewAt < 120) return;
     lastPreviewAt = now;
-    const top = found.sort((a, b) => b.size - a.size).slice(0, 5);
-    scanPreviewRows = [
-      row(
-        folderRoot ? `Đang quét trong ${displayPath(folderRoot)}...` : 'Đang quét thư mục lớn...',
-        `Mục ${Math.min(scanProgress.doneRoots + 1, scanProgress.totalRoots)}/${scanProgress.totalRoots}  ·  ${scanProgress.root || 'đang chạy'}  ·  đã quét ${scanProgress.checked} thư mục  ·  thấy ${scanProgress.found} thư mục có dữ liệu`,
-        {},
-      ),
-      ...(top.length ? top : [row('Chưa có kết quả', 'Đang tính dung lượng thư mục hiện tại', {})]),
-    ];
+    const sorted = found.sort((a, b) => b.size - a.size);
+    scanResultRows = sorted;
+    const top = sorted.slice(0, pageSize());
+    scanPreviewRows = top.length ? top : [row('Chưa có kết quả', `Đang tính dung lượng: ${scanProgress.root || 'đang chạy'}`, {})];
+    syncBusySelection();
     render();
   };
 
@@ -470,16 +516,15 @@ async function largeFileRows() {
     const now = Date.now();
     if (now - lastPreviewAt < 120) return;
     lastPreviewAt = now;
-    scanPreviewRows = [
-      row(
-        'Đang quét file lớn...',
-        `Mục ${Math.min(scanProgress.doneRoots + 1, scanProgress.totalRoots)}/${scanProgress.totalRoots}  ·  ${scanProgress.root || 'đang chạy'}  ·  đã quét ${scanProgress.checked} file  ·  thấy ${scanProgress.found} file lớn`,
-        {},
-      ),
-      ...(preview.length
+    const sorted = matches.sort((a, b) => b.size - a.size);
+    scanResultRows = sorted;
+    const top = sorted.slice(0, pageSize());
+    scanPreviewRows = top.length
+      ? top
+      : preview.length
         ? preview.slice(0, 5).map((entry) => row(entry.title, entry.detail, entry))
-        : [row('Chưa quét được file nào', 'Đang đọc danh sách file trong thư mục hiện tại', {})]),
-    ];
+        : [row('Chưa quét được file nào', `Đang đọc: ${scanProgress.root || 'đang chạy'}`, {})];
+    syncBusySelection();
     render();
   };
   const maybeFinishStats = () => {
@@ -839,12 +884,17 @@ function render() {
     console.log(`\n${paint('y', color.green, color.bold)} ${paint('xoá', color.dim)}  ·  ${paint('n', color.red, color.bold)} ${paint('huỷ', color.dim)}`);
     return;
   }
-  console.log(`${paint('Màn hình:', color.dim)} ${paint(screen, color.magenta)}   ${busy ? paint(scanStatus(), color.yellow) : helpText()}`);
+  console.log(`${paint('Màn hình:', color.dim)} ${paint(screen, color.magenta)}`);
+  console.log(busy ? paint(scanStatus(), color.yellow) : paint('Sẵn sàng', color.dim));
+  console.log(busy ? scanHelpText() : helpText());
   if (screen === 'folders' && folderRoot) console.log(`${paint('Đường dẫn:', color.dim)} ${paint(displayPath(folderRoot), color.cyan)}`);
-  if (!busy && rows[cursor]?.path) console.log(`${paint('Đang chọn:', color.dim)} ${paint(displayPath(rows[cursor].path), color.cyan)}`);
+  const activeItem = getActiveItem();
+  if (!busy && activeItem?.path) console.log(`${paint('Đang chọn:', color.dim)} ${paint(displayPath(activeItem.path), color.cyan)}`);
+  console.log(paint('─'.repeat(Math.min(process.stdout.columns || 80, 96)), color.dim));
   if (status) console.log(`\n${paint(status, status.startsWith('Lỗi') || status.includes('thất bại') ? color.red : color.yellow)}`);
   console.log('');
-  const allRows = busy && scanPreviewRows.length ? scanPreviewRows : rows;
+  const allRows = busy ? (scanResultRows.length ? scanResultRows : scanPreviewRows) : rows;
+  if (busy) syncBusySelection();
   const { visibleRows, offset } = visibleWindow(allRows);
   if (!allRows.length && !busy) console.log('Không có mục nào.');
   if (offset > 0) console.log(paint(`  ↑ ${offset} mục trên`, color.dim));
@@ -856,17 +906,51 @@ function render() {
     const line = `${active} ${item.title}`;
     console.log(isActive ? `${paint('›', color.green, color.bold)} ${paint(item.title, color.cyan, color.bold)}` : line);
     if (item.detail?.type === 'table') renderTable(item.detail.rows);
-    else if (item.detail) console.log(`    ${renderDetail(item.detail.slice(0, 136))}`);
+    else if (item.detail) console.log(`    ${renderDetail(truncateLine(item.detail))}`);
   });
-  const hiddenBelow = allRows.length - offset - visibleRows.length;
+  const totalRows = busy && scanResultRows.length ? scanResultRows.length : allRows.length;
+  const hiddenBelow = totalRows - offset - visibleRows.length;
   if (hiddenBelow > 0) console.log(`\n${paint(`  ↓ ${hiddenBelow} mục dưới`, color.dim)}`);
 }
 
 function visibleWindow(allRows) {
-  if (busy) return { visibleRows: allRows, offset: 0 };
-  const maxRows = Math.max(4, Math.floor(((process.stdout.rows || 24) - 8) / 3));
+  const headerRows = 9 + (status ? 2 : 0) + (screen === 'folders' && folderRoot ? 1 : 0) + (!busy && getActiveItem()?.path ? 1 : 0);
+  const maxRows = pageSize(headerRows);
   const offset = Math.min(Math.max(0, cursor - Math.floor(maxRows / 2)), Math.max(0, allRows.length - maxRows));
   return { visibleRows: allRows.slice(offset, offset + maxRows), offset };
+}
+
+function rowKey(item) {
+  return item?.path || item?.title || '';
+}
+
+function getBusyItemAtCursor() {
+  const rows = scanResultRows.length ? scanResultRows : scanPreviewRows;
+  return rows[cursor];
+}
+
+function syncBusySelection() {
+  const rows = scanResultRows.length ? scanResultRows : scanPreviewRows;
+  if (!rows.length) return;
+  if (selectedScanKey) {
+    const index = rows.findIndex((item) => rowKey(item) === selectedScanKey);
+    if (index >= 0) {
+      cursor = index;
+      return;
+    }
+  }
+  cursor = Math.min(cursor, rows.length - 1);
+  selectedScanKey = rowKey(rows[cursor]);
+}
+
+function pageSize(headerRows = 9 + (status ? 2 : 0)) {
+  return Math.max(3, Math.floor(((process.stdout.rows || 24) - headerRows) / 3));
+}
+
+function truncateLine(value) {
+  const max = Math.max(40, (process.stdout.columns || 100) - 6);
+  const text = String(value);
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
 
 function renderDetail(detail) {
@@ -886,6 +970,7 @@ function helpText() {
   }
   return [
     [paint('↑/↓', color.yellow, color.bold), 'di chuyển'],
+    [paint('PgUp/PgDn', color.yellow, color.bold), 'nhảy'],
     [paint('Enter', color.green, color.bold), 'mở/vào'],
     [paint('d/⌫', color.red, color.bold), 'xoá'],
     [paint('r', color.cyan, color.bold), 'quét lại'],
@@ -899,15 +984,23 @@ function scanStatus() {
   const frames = ['⠋', '⠙', '⠹', '⠸', '⠼', '⠴', '⠦', '⠧', '⠇', '⠏'];
   const elapsed = formatElapsed(Date.now() - scanStartedAt);
   if (screen === 'files') {
-    return `${frames[spinnerIndex % frames.length]} Đang quét... ${elapsed}  ·  ${scanProgress.doneRoots}/${scanProgress.totalRoots} mục  ·  ${scanProgress.checked} file  ·  ${scanProgress.found} lớn  ·  p dừng  ·  q quay lại  ·  Esc thoát`;
+    return `${frames[spinnerIndex % frames.length]} Đang quét... ${elapsed}  ·  ${scanProgress.doneRoots}/${scanProgress.totalRoots} mục  ·  ${scanProgress.checked} file  ·  ${scanProgress.found} lớn`;
   }
   if (screen === 'folders') {
-    return `${frames[spinnerIndex % frames.length]} Đang quét... ${elapsed}  ·  ${scanProgress.doneRoots}/${scanProgress.totalRoots} mục  ·  ${scanProgress.checked} thư mục  ·  ${scanProgress.found} có dữ liệu  ·  p dừng  ·  q quay lại  ·  Esc thoát`;
+    return `${frames[spinnerIndex % frames.length]} Đang quét... ${elapsed}  ·  ${scanProgress.doneRoots}/${scanProgress.totalRoots} mục  ·  ${scanProgress.checked} thư mục  ·  ${scanProgress.found} có dữ liệu`;
   }
   if (screen === 'suggestions') {
-    return `${frames[spinnerIndex % frames.length]} Đang quét... ${elapsed}  ·  ${scanProgress.doneRoots}/${scanProgress.totalRoots} mục  ·  ${scanProgress.found} có dữ liệu  ·  p dừng  ·  q quay lại  ·  Esc thoát`;
+    return `${frames[spinnerIndex % frames.length]} Đang quét... ${elapsed}  ·  ${scanProgress.doneRoots}/${scanProgress.totalRoots} mục  ·  ${scanProgress.found} có dữ liệu`;
   }
-  return `${frames[spinnerIndex % frames.length]} Đang quét... ${elapsed}  ·  p dừng  ·  q quay lại  ·  Esc thoát`;
+  return `${frames[spinnerIndex % frames.length]} Đang quét... ${elapsed}`;
+}
+
+function scanHelpText() {
+  return [
+    [paint('p/Space', color.yellow, color.bold), 'tạm dừng'],
+    [paint('q', color.cyan, color.bold), 'quay lại'],
+    [paint('Esc', color.cyan, color.bold), 'thoát'],
+  ].map(([key, text]) => `${key} ${paint(text, color.dim)}`).join(paint('  ·  ', color.dim));
 }
 
 function renderTable(dataRows) {
@@ -957,10 +1050,14 @@ function pauseScan(message) {
   busy = false;
   scanState = 'paused';
   stopSpinner();
-  if (scanPreviewRows.length) {
+  if (scanResultRows.length) {
+    rows = scanResultRows;
+    cursor = Math.min(cursor, Math.max(0, rows.length - 1));
+  } else if (scanPreviewRows.length) {
     rows = scanPreviewRows;
     cursor = Math.min(cursor, Math.max(0, rows.length - 1));
   }
+  selectedScanKey = rowKey(getActiveItem());
   status = message;
 }
 
@@ -1006,6 +1103,7 @@ function formatElapsed(ms) {
 
 function quit() {
   if (process.stdin.isTTY) process.stdin.setRawMode(false);
+  if (process.stdout.isTTY) process.stdout.write('\x1b[?25h\x1b[?1049l');
   process.stdout.write('\n');
   process.exit(0);
 }
