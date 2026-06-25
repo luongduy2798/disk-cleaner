@@ -1,0 +1,16 @@
+{
+  "name": "disk-cleaner",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "disk-cleaner": "./bin/disk-cleaner.mjs"
+  },
+  "scripts": {
+    "start": "node ./bin/disk-cleaner.mjs",
+    "check": "node --check ./bin/disk-cleaner.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
