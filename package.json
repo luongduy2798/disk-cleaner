@@ -8,7 +8,8 @@
   },
   "scripts": {
     "start": "node ./bin/disk-cleaner.mjs",
-    "check": "node --check ./bin/disk-cleaner.mjs"
+    "check": "node --check ./bin/disk-cleaner.mjs",
+    "self-check": "node ./scripts/self-check.mjs"
   },
   "engines": {
     "node": ">=20"

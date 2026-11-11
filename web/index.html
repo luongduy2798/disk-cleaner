@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>Disk Cleaner — Hiểu rõ trước khi dọn</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <script type="module" src="/app.js"></script>
+</head>
+<body>
+  <div class="app-shell">
+    <aside class="sidebar" aria-label="Điều hướng">
+      <a class="brand" href="/" aria-label="Disk Cleaner, trang chủ"><span class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="6"/><path d="M7 15h10M7 10h6"/><circle cx="17" cy="10" r="1"/></svg></span><span>Disk Cleaner<small>KHÔNG GIAN CHO ĐIỀU MỚI</small></span></a>
+      <div class="sidebar-label">KHÔNG GIAN LƯU TRỮ</div>
+      <nav class="navigation" aria-label="Màn hình">
+        <button type="button" data-view="overview" class="nav-button active" aria-current="page"><span aria-hidden="true">◫</span>Tổng quan</button>
+        <button type="button" data-view="suggestions" class="nav-button"><span aria-hidden="true">◇</span>Gợi ý dọn dẹp</button>
+        <button type="button" data-view="folders" class="nav-button"><span aria-hidden="true">▱</span>Thư mục</button>
+        <button type="button" data-view="files" class="nav-button"><span aria-hidden="true">▤</span>File lớn</button>
+      </nav>
+      <div class="sidebar-label scope-label">PHẠM VI PHÂN TÍCH</div>
+      <label class="sr-only" for="root-picker">Chọn phạm vi phân tích</label><select id="root-picker"></select>
+      <button type="button" id="pick-folder" class="button subtle">+ Chọn thư mục / ổ đĩa</button>
+      <div class="sidebar-bottom"><span class="local-indicator">Chạy riêng trên máy này</span><p>Dữ liệu và đường dẫn ở trên Mac.<br>Không gửi tới dịch vụ bên ngoài.</p><button type="button" id="open-permissions" class="text-button">Hướng dẫn quyền truy cập</button></div>
+    </aside>
+    <main>
+      <header class="page-header"><div><p class="eyebrow">KHÔNG GIAN LƯU TRỮ</p><h1 id="page-title">Một góc nhìn rõ ràng hơn.</h1><p id="page-description" class="muted">Biết dung lượng nằm ở đâu. Hiểu tác động trước khi dọn.</p></div><div class="header-actions"><button type="button" id="quick-scan" class="button">Quét nhanh</button><button type="button" id="deep-scan" class="button primary">Quét sâu phạm vi</button></div></header>
+      <div id="connection-warning" class="notice warning" role="status" hidden>Mất kết nối với backend. Giữ terminal đang chạy; tự động kết nối lại.</div>
+      <section class="scan-card" aria-label="Trạng thái quét"><div class="scan-status"><span id="scan-dot" class="status-dot"></span><strong id="scan-title">Đang kết nối…</strong><span id="scan-time" class="muted"></span><button type="button" id="refresh-scan" class="text-button">Quét lại</button><button type="button" id="stop-scan" class="text-button" hidden>Dừng và xem kết quả</button></div><p id="scan-summary" class="muted">Gợi ý được tự tính dung lượng. Quét sâu để đo các thư mục khác và tìm file chưa có trong Spotlight.</p><p id="scan-current" class="scan-path" hidden></p><details id="scan-issues" hidden><summary id="issues-summary"></summary><ul id="issues-list"></ul></details></section>
+      <section id="overview-panel">
+        <div class="overview-grid">
+          <article class="storage-card"><p class="eyebrow">Ổ ĐĨA CHỨA PHẠM VI</p><h2 id="disk-name">Không gian trên ổ đĩa</h2><p class="storage-total"><strong id="disk-used">—</strong><span id="disk-total">đang đọc dung lượng</span></p><div id="disk-meter" class="storage-meter" role="img" aria-label="Đang đọc dung lượng ổ đĩa"></div><ul id="disk-categories" class="storage-categories" aria-label="Phân nhóm dung lượng"></ul><div class="storage-legend"><span>Dung lượng toàn ổ</span><span><i class="free-swatch"></i><b id="disk-free">—</b> còn trống</span></div><p id="disk-mount" class="muted small"></p><p id="disk-note" class="muted small">Các nhóm cập nhật dần theo kết quả quét.</p></article>
+          <article class="guidance-card"><span class="card-number">01 / BẮT ĐẦU TỪ ĐÂY</span><h2>Dọn có hiểu biết.<br>Giữ lại điều quan trọng.</h2><p>Mỗi mục đều có giải thích về công dụng, khả năng tạo lại và tác động khi xoá. Mục chưa rõ luôn được đánh dấu.</p><button type="button" class="button" data-view="suggestions">Xem gợi ý dọn dẹp <span aria-hidden="true">↗</span></button></article>
+        </div>
+        <div class="section-heading"><div><p class="eyebrow">KHÁM PHÁ DỮ LIỆU</p><h2>Chọn cách bắt đầu</h2></div><span class="muted small">Không có mục nào được chọn sẵn</span></div>
+        <div class="explore-grid"><button type="button" class="explore-card" data-view="suggestions"><span class="explore-symbol" aria-hidden="true">◇</span><strong>Gợi ý dọn dẹp</strong><span>Cache và dữ liệu đã nhận diện, kèm tác động.</span><b>Xem gợi ý ↗</b></button><button type="button" class="explore-card" data-view="folders"><span class="explore-symbol" aria-hidden="true">▱</span><strong>Duyệt thư mục</strong><span>Đi từ thư mục lớn đến từng mục bên trong.</span><b>Mở cây thư mục ↗</b></button><button type="button" class="explore-card" data-view="files"><span class="explore-symbol" aria-hidden="true">▤</span><strong>Tìm file lớn</strong><span>File chiếm từ 100 MiB dung lượng thực tế.</span><b>Khám phá file lớn ↗</b></button></div>
+        <p class="footnote">Chuyển vào Thùng rác vẫn chiếm dung lượng. Chỉ giải phóng khi dọn Thùng rác trong Finder.</p>
+      </section>
+      <section id="browser-panel" hidden>
+        <div class="browser-layout"><div id="results-panel" class="results-panel">
+          <nav id="breadcrumbs" class="breadcrumbs" aria-label="Đường dẫn thư mục"></nav>
+          <div class="table-toolbar"><label class="search-field"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><circle cx="8.5" cy="8.5" r="5.5"/><path d="m13 13 4 4"/></svg><input id="search" type="search" maxlength="300" placeholder="Tìm tên hoặc đường dẫn…" aria-label="Tìm trong kết quả"></label><label><span class="sr-only">Sắp xếp</span><select id="sort"><option value="size-desc">Dung lượng giảm dần</option><option value="size-asc">Dung lượng tăng dần</option><option value="name">Tên A–Z</option><option value="modified">Mới sửa gần đây</option></select></label></div>
+          <div id="directory-error" class="notice warning" role="status" hidden></div><div class="results-meta"><span id="result-count" class="muted small"></span><button type="button" id="scan-directory" class="text-button" hidden>Quét sâu thư mục này</button></div>
+          <div class="folder-content"><nav id="folder-tree" class="folder-tree" aria-label="Cây thư mục" hidden></nav><div class="table-area"><div class="table-scroll"><table><thead><tr><th class="check-cell"><input type="checkbox" id="select-page" aria-label="Chọn các mục được phép dọn trên trang này"></th><th>Tên và vị trí</th><th>Dung lượng</th><th>Rủi ro</th></tr></thead><tbody id="results-body"></tbody></table></div><div id="empty-state" class="empty-state" hidden><strong id="empty-title">Chưa có kết quả</strong><p id="empty-description"></p></div><div class="pagination"><span id="page-label" class="muted small"></span><div><button type="button" id="previous-page" class="button compact">Trước</button><button type="button" id="next-page" class="button compact">Sau</button></div></div></div></div>
+        </div><aside id="detail-panel" class="detail-panel" aria-label="Chi tiết mục"><div class="detail-placeholder"><span class="eyebrow">HIỂU RÕ TRƯỚC KHI DỌN</span><h2>Mục này dùng để làm gì?</h2><p>Chọn tên một mục để xem công dụng, bằng chứng nhận diện và ảnh hưởng khi chuyển vào Thùng rác.</p></div></aside></div>
+      </section>
+      <div id="selection-bar" class="selection-bar" hidden><div><strong id="selection-count"></strong><span id="selection-size"></span></div><div><button type="button" id="clear-selection" class="button">Bỏ chọn</button><button type="button" id="preview-trash" class="button danger">Xem trước khi dọn</button></div></div>
+    </main>
+  </div>
+  <div id="toast" role="status" aria-live="polite" hidden></div>
+  <dialog id="trash-dialog" aria-labelledby="trash-dialog-title"><form method="dialog"><button type="submit" class="dialog-close" aria-label="Đóng">×</button></form><p class="eyebrow">XÁC NHẬN THAO TÁC</p><h2 id="trash-dialog-title">Chuyển vào Thùng rác?</h2><p class="muted">Có thể khôi phục trong Finder. Dung lượng chưa được giải phóng cho tới khi dọn Thùng rác.</p><div id="trash-preview-list" class="preview-list"></div><div id="trash-preview-errors" class="notice warning" hidden></div><label id="risk-acknowledgement" class="risk-acknowledgement" hidden><input type="checkbox" id="acknowledge-risk"><span>Đã hiểu: mục rủi ro cao hoặc chưa xác định có thể chứa dữ liệu duy nhất. Việc tạo lại hoặc khôi phục có thể không khả thi.</span></label><p id="trash-dialog-error" class="error-text" role="alert" hidden></p><div class="dialog-actions"><button type="button" id="cancel-trash" class="button">Giữ lại</button><button type="button" id="confirm-trash" class="button danger">Chuyển vào Thùng rác</button></div></dialog>
+  <dialog id="permissions-dialog" aria-labelledby="permissions-title"><form method="dialog"><button type="submit" class="dialog-close" aria-label="Đóng">×</button></form><p class="eyebrow">QUYỀN TRÊN MACOS</p><h2 id="permissions-title">Đọc đủ, báo rõ phần thiếu.</h2><p>Công cụ vẫn quét những vùng có quyền đọc. Mục bị từ chối truy cập được đánh dấu; không được tính như thư mục rỗng.</p><ol><li>Mở System Settings → Privacy &amp; Security → Full Disk Access.</li><li>Cấp quyền cho ứng dụng đang chạy backend: Terminal, iTerm, VS Code hoặc ứng dụng tương ứng.</li><li>Thoát và mở lại ứng dụng đó; chạy lại <code>npm start</code>, rồi quét lại.</li></ol><p class="muted small">Chỉ cấp quyền nếu muốn đọc các vùng được macOS bảo vệ. Quyền điều khiển Finder có thể được hỏi khi chuyển Thùng rác.</p><button type="button" id="settings-button" class="button primary">Mở cài đặt macOS</button></dialog>
+</body>
+</html>
