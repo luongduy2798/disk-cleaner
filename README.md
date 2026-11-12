@@ -24,6 +24,8 @@ Quy tắc nhận diện cache npm/npx, Bun, Gradle, pip/uv, Flutter, Chrome, Ele
 
 Kết quả nhanh vẫn **chưa đầy đủ**, có thể thiếu file ẩn, thư mục bị loại khỏi Spotlight, ổ chưa lập chỉ mục hoặc dự án nằm sâu hơn. Thư mục ngoài các gợi ý vẫn ghi “Chưa tính” cho tới khi chọn **Quét sâu phạm vi** hoặc quét riêng mục đang xem. Lượt nhanh có nhiều gợi ý lớn vẫn có thể kéo dài; không cần đợi xong để đọc kết quả.
 
+Khung quét hiển thị **% lớn và thanh tiến độ**. Giai đoạn đo của quét nhanh tính theo số vị trí đã xử lý; quét sâu ghi rõ **ước tính theo nhánh thư mục**, cập nhật tổng nhánh trong cùng lượt duyệt. Các nhánh không có cùng kích thước, nên đây không phải % số file hoặc thời gian còn lại. Khi nhận diện vị trí/đọc Spotlight chưa biết tổng, thanh chạy ở trạng thái chưa xác định. 100% chỉ báo lượt quét đã kết thúc; mục bị bỏ qua và kết quả chưa đầy đủ vẫn được đánh dấu. Dừng quét giữ tiến độ đã có.
+
 Quét sâu dùng một lượt `opendir`/`lstat`, tối đa 16 thao tác I/O cùng lúc, dùng chung dữ liệu giữa các màn hình. Phạm vi toàn ổ cho phép cặp volume macOS/Data đã nhận diện, bỏ `/System/Volumes` và `/Volumes` để tránh cộng trùng hoặc quét nhầm ổ ngoài. Các phạm vi khác không tự vượt filesystem; không đi theo symlink. Hãy chọn ổ ngoài làm phạm vi riêng. Giới hạn độ sâu 256, có thông báo khi bỏ qua. Có thể duyệt kết quả và dừng trong lúc quét; kết quả dừng giữa chừng luôn được đánh dấu. Vùng hệ thống chỉ được xem.
 
 Kết quả và thời điểm đo chỉ nằm trong bộ nhớ tới khi backend dừng. Đổi màn hình không quét lại. **Quét lại** bắt đầu lượt mới, bỏ cache; thay đổi từ ứng dụng khác không được theo dõi tự động. Dung lượng hard link chỉ cộng một lần; APFS clone và snapshot khiến dung lượng thực thu hồi có thể khác ước tính.
@@ -42,6 +44,8 @@ Vùng hệ thống, symlink, mục đặc biệt, Thùng rác, thư mục ngư�
 ## Quyền truy cập
 
 Thiếu quyền vẫn quét phần đọc được, báo phần bị bỏ qua thay vì coi thư mục là rỗng. Dùng **Hướng dẫn quyền truy cập** trong web để mở **System Settings → Privacy & Security → Full Disk Access**. Cấp quyền cho **ứng dụng chạy backend** (Terminal, iTerm, VS Code…), thoát/mở lại ứng dụng đó rồi chạy lại. Không cần cấp Full Disk Access nếu không muốn đọc các vùng được macOS bảo vệ.
+
+Web không thể tự bật Full Disk Access. Hộp thoại gợi ý ứng dụng dựa trên terminal chạy backend và hiển thị đường dẫn Node. Thống kê tách lỗi `EPERM`/`EACCES`, lỗi quét khác và các mục bỏ qua; danh sách ưu tiên tối đa 20 lỗi truy cập. Symlink và mục đặc biệt chỉ gộp số lượng, không lấp danh sách lỗi. Full Disk Access không gỡ mọi giới hạn hệ thống hoặc thay đổi quy tắc bỏ qua liên kết.
 
 ## Kiểm chứng
 

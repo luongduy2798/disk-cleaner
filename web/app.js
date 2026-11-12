@@ -166,11 +166,14 @@ function renderStorage(root) {
     segment.style.flexGrow = String(key in totals ? value * scale : value);
     segment.title = `${label}: ${text}`;
     if (value) $('disk-meter').append(segment);
-    const entry = element('li');
+    const entry = element('tr');
     const swatch = element('i');
     swatch.dataset.storage = key;
     swatch.setAttribute('aria-hidden', 'true');
-    entry.append(swatch, element('span', `${label} · ${text}`));
+    const name = element('th');
+    name.scope = 'row';
+    name.append(swatch, element('span', label));
+    entry.append(name, element('td', text));
     $('disk-categories').append(entry);
   }
   $('disk-meter').setAttribute('aria-label', `${bytes(disk.used, true)} trên ${bytes(disk.total, true)} đã dùng. ${descriptions.join('. ')}`);
@@ -182,6 +185,25 @@ function renderStorage(root) {
     state.scan?.usageStale ? 'Phân nhóm cần quét lại sau khi chuyển Thùng rác.' : '',
     scale < 1 ? 'File APFS có thể dùng chung block; thanh được chuẩn hoá về tổng dung lượng ổ.' : '',
   ].filter(Boolean).join(' ');
+}
+
+function renderScanProgress(scan) {
+  const progress = scan?.progress;
+  const running = scan?.status === 'running';
+  $('scan-progress').hidden = !progress;
+  document.querySelector('.scan-card').classList.toggle('scanning', running);
+  if (!progress) return;
+  const { percent, estimated, done, total } = progress;
+  const finished = ['complete', 'partial'].includes(scan.status);
+  $('scan-percent').textContent = percent === null ? running ? '…' : '—' : `${percent}%`;
+  $('scan-progress-label').textContent = finished ? 'Lượt quét đã kết thúc' : scan.status === 'cancelled' ? 'Đã dừng quét' : scan.status === 'error' ? 'Quét bị gián đoạn' : percent === null ? 'Đang xác định tiến độ' : estimated ? 'Tiến độ quét sâu · ước tính' : 'Tiến độ đo dung lượng';
+  $('scan-progress-detail').textContent = finished
+    ? scan.status === 'partial' ? '100% lượt quét; kết quả có thể chưa đầy đủ hoặc có mục bị bỏ qua.' : 'Đã xử lý xong phạm vi được chọn.'
+    : percent === null ? 'Chưa biết tổng số mục; kết quả vẫn cập nhật khi nhận diện vị trí và tìm file lớn.'
+    : `${done.toLocaleString('vi')}/${total.toLocaleString('vi')} ${scan.mode === 'quick' ? 'vị trí đã xử lý trong giai đoạn đo' : 'nhánh đã xử lý; các nhánh khác nhau về kích thước, ước tính có thể điều chỉnh'}.`;
+  if (percent === null && running) $('scan-progress-bar').removeAttribute('value');
+  else $('scan-progress-bar').value = percent ?? 0;
+  $('scan-progress-bar').setAttribute('aria-valuetext', percent === null ? 'Chưa xác định tổng số mục' : `${percent}%${estimated ? ', ước tính theo nhánh thư mục' : ''}`);
 }
 
 function renderState(next) {
@@ -201,8 +223,11 @@ function renderState(next) {
   picker.value = rootId;
   const root = state.roots.find((item) => item.id === rootId);
   renderStorage(root);
+  $('permission-app').textContent = state.backend?.terminalApp || 'Ứng dụng đang chạy backend: Terminal, iTerm, VS Code hoặc ứng dụng tương ứng';
+  $('permission-process').textContent = state.backend?.executable ? `Node đang chạy: ${state.backend.executable}` : '';
   $('deep-scan').textContent = rootId === state.startupRootId ? 'Quét sâu toàn ổ' : 'Quét sâu phạm vi';
   const scan = state.scan;
+  renderScanProgress(scan);
   if (scan) {
     if ((treeScanId !== scan.id || (treeScanStatus === 'running' && scan.status !== 'running')) && view === 'folders') renderTree(true);
     treeScanId = scan.id;
@@ -219,8 +244,14 @@ function renderState(next) {
     $('scan-current').textContent = `Phạm vi: ${scan.paths.join(' · ')}${scan.status === 'running' ? ` · Đang đọc: ${scan.currentPath}` : ''}`;
     $('scan-current').title = `${scan.paths.join('\n')}\n${scan.currentPath}`;
     $('scan-issues').hidden = scan.errors + scan.skipped === 0;
-    $('issues-summary').textContent = `${scan.errors} lỗi hoặc thiếu quyền · ${scan.skipped} mục bỏ qua${scan.errors + scan.skipped > 20 ? ' · hiển thị 20 mục đầu' : ''}`;
-    $('issues-list').replaceChildren(...scan.issues.map((issue) => element('li', `${issue.path}: ${issue.message}`)));
+    const permissionErrors = scan.permissionErrors || 0;
+    const intentional = (scan.linksSkipped || 0) + (scan.specialSkipped || 0);
+    $('issues-summary').textContent = `${permissionErrors} thiếu quyền · ${scan.errors - permissionErrors} lỗi khác · ${scan.skipped} mục bỏ qua${scan.errors + scan.skipped - intentional > scan.issues.length ? ' · tối đa 20 mục, ưu tiên lỗi truy cập' : ''}`;
+    $('scan-skipped-note').hidden = intentional === 0;
+    $('scan-skipped-note').textContent = `${(scan.linksSkipped || 0).toLocaleString('vi')} liên kết và ${(scan.specialSkipped || 0).toLocaleString('vi')} mục đặc biệt được bỏ qua chủ động để tránh đi vòng, đọc thiết bị hoặc cộng trùng. Đây không phải lỗi thiếu quyền; Full Disk Access không thay đổi cách xử lý này.`;
+    $('scan-permissions').hidden = permissionErrors === 0;
+    const kinds = { permission: 'Thiếu quyền', error: 'Lỗi', skipped: 'Bỏ qua' };
+    $('issues-list').replaceChildren(...scan.issues.map((issue) => element('li', `${kinds[issue.kind] || 'Lưu ý'}${issue.code ? ` (${issue.code})` : ''} · ${issue.path}: ${issue.message}`)));
   } else {
     $('scan-title').textContent = 'Sẵn sàng phân tích';
   }
@@ -411,7 +442,7 @@ function treeNode(item, open = false) {
       if (!li.isConnected) return;
       if (nextPage === 1) children.replaceChildren();
       for (const child of response.items) children.append(treeNode(child));
-      if (response.accessError) children.append(element('li', 'Thiếu quyền đọc'));
+      if (response.accessError) children.append(element('li', response.accessError));
       if (response.page < response.pages) {
         const more = element('li');
         more.append(button('Thêm thư mục…', () => { more.remove(); load(nextPage + 1); }));
@@ -546,7 +577,7 @@ $('confirm-trash').addEventListener('click', () => action(async () => {
   } catch (error) { $('trash-dialog-error').textContent = error.message; $('trash-dialog-error').hidden = false; }
 }));
 $('trash-dialog').addEventListener('close', () => { $('trash-dialog-title').textContent = 'Chuyển vào Thùng rác?'; $('confirm-trash').hidden = false; $('cancel-trash').textContent = 'Giữ lại'; });
-$('open-permissions').addEventListener('click', () => $('permissions-dialog').showModal());
+for (const id of ['open-permissions', 'scan-permissions']) $(id).addEventListener('click', () => $('permissions-dialog').showModal());
 $('settings-button').addEventListener('click', () => action(() => api('/api/permissions', {})));
 $('results-body').addEventListener('focusout', () => {
   setTimeout(() => {

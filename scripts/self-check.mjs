@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import http from 'node:http';
-import { DiskCleaner, LARGE_FILE_BYTES, allocatedBytes, classify, inside, normalizeRoots, storageCategory } from '../lib/cleaner.mjs';
+import { DiskCleaner, LARGE_FILE_BYTES, allocatedBytes, classify, inside, normalizeRoots, scanProgress, storageCategory } from '../lib/cleaner.mjs';
 import { startServer } from '../lib/server.mjs';
 
 // Chỉ tạo dữ liệu tạm trong repository. Mọi thao tác Thùng rác và lệnh macOS đều được giả lập.
@@ -42,6 +42,13 @@ try {
   finally { await sparse.close(); }
 
   assert.equal(allocatedBytes({ blocks: 0, size: LARGE_FILE_BYTES * 2 }), 0, 'Sparse file không dùng dung lượng logic làm dung lượng cấp phát.');
+  const progressFixture = { mode: 'quick', stage: 'measure', status: 'running', measuredSuggestions: 1, totalSuggestions: 4 };
+  assert.equal(scanProgress(progressFixture).percent, 25);
+  assert.equal(scanProgress({ ...progressFixture, stage: 'spotlight' }).percent, null, 'Chưa biết tổng số mục thì không tạo phần trăm giả.');
+  assert.equal(scanProgress({ ...progressFixture, measuredSuggestions: 4 }).percent, 99, 'Không báo 100% khi lượt quét còn chạy.');
+  assert.equal(scanProgress({ ...progressFixture, status: 'cancelled' }).percent, 25, 'Huỷ giữ tiến độ hiện có, không báo hoàn tất.');
+  assert.equal(scanProgress({ ...progressFixture, status: 'partial' }).percent, 100, '100% là lượt quét đã kết thúc, không khẳng định kết quả đầy đủ.');
+  assert.equal(scanProgress({ mode: 'deep', status: 'running', completedBranches: 1, totalBranches: 4 }).estimated, true);
   assert.deepEqual(normalizeRoots([home, path.join(home, '.hidden'), home]), [home]);
   assert.equal(inside(`${home}-other`, home), false, 'So khớp theo thành phần đường dẫn.');
   assert.equal(classify(oddPath, home).risk, 'unknown');
@@ -108,6 +115,14 @@ try {
   await cleaner.scanTask;
   assert.deepEqual(cleaner.scan.paths, [home]);
   assert.equal(cleaner.scan.status, 'partial');
+  assert.ok(cleaner.scan.totalBranches > 0);
+  assert.equal(cleaner.scan.completedBranches, cleaner.scan.totalBranches, 'Theo dõi tiến độ ngay trong lượt duyệt, kể cả nhánh không đọc đủ.');
+  assert.equal(cleaner.state().scan.progress.percent, 100);
+  assert.equal('branchTotals' in cleaner.state().scan, false);
+  assert.equal(cleaner.scan.permissionErrors, 2, 'Chỉ EPERM/EACCES được tính là thiếu quyền.');
+  assert.equal(cleaner.scan.linksSkipped, 1, 'Symlink được đếm riêng, không báo là thiếu quyền.');
+  assert.equal(cleaner.scan.issues[0].kind, 'permission');
+  assert.equal(cleaner.scan.issues.some((issue) => issue.path === path.join(home, 'outside-link')), false, 'Không lấp danh sách lỗi bằng từng symlink.');
   assert.ok(maximumStats <= 16, 'Không vượt 16 lstat đồng thời.');
   assert.ok([...statCalls.values()].every((count) => count === 1), 'Mỗi mục chỉ lstat một lần trong lượt quét sâu.');
   assert.equal(statCalls.has(path.join(home, 'denied/secret')), false);
@@ -128,6 +143,15 @@ try {
   const suggestions = await cleaner.list({ view: 'suggestions' });
   assert.ok(suggestions.items.some((item) => item.path === path.join(home, '.npm/_cacache')));
   assert.ok(suggestions.items.some((item) => item.path === path.join(home, 'project/node_modules')));
+  const diagnostics = { errors: 0, permissionErrors: 0, skipped: 0, issues: [] };
+  for (let index = 0; index < 25; index += 1) cleaner.recordIssue(diagnostics, path.join(home, `skipped-${index}`), 'Filesystem khác.', false);
+  for (let index = 0; index < 25; index += 1) cleaner.recordIssue(diagnostics, path.join(home, `changed-${index}`), 'Không còn tồn tại.', { code: 'ENOENT' });
+  cleaner.recordIssue(diagnostics, path.join(home, 'denied'), 'Không có quyền đọc.', { code: 'EACCES' });
+  assert.equal(diagnostics.issues.length, 20);
+  assert.equal(diagnostics.issues[0].code, 'EACCES', 'Lỗi quyền xuất hiện sau nhiều mục bỏ qua vẫn được hiển thị trước.');
+  assert.equal(diagnostics.permissionErrors, 1);
+  assert.equal(diagnostics.errors, 26);
+  assert.equal(diagnostics.skipped, 25);
 
   await cleaner.list({ view: 'folders' });
   const odd = cleaner.item(cleaner.byPath.get(oddPath));

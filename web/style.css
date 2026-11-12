@@ -97,6 +97,20 @@ main { padding: 38px clamp(22px, 3.4vw, 54px) 110px; min-width: 0; max-width: 19
 
 /* Tiến độ và lỗi không chặn phần dữ liệu còn đọc được. */
 .scan-card { border: 1px solid var(--line); background: #fafbf8; padding: 16px 20px; border-radius: 10px; margin-bottom: 26px; }
+.scan-card.scanning { border-color: #94b49c; background: #f0f6ed; box-shadow: 0 3px 14px #27634e12; }
+.scan-progress { margin: 18px 0 16px; }
+.scan-progress-heading { display: flex; align-items: center; gap: 20px; margin-bottom: 13px; }
+#scan-percent { font-size: clamp(38px, 4vw, 56px); font-weight: 650; line-height: 1; letter-spacing: -2px; color: var(--green); font-variant-numeric: tabular-nums; min-width: 112px; }
+.scan-progress-heading > div { min-width: 0; }
+#scan-progress-label { font-size: 13px; }
+#scan-progress-detail { font-size: 11px; line-height: 1.6; color: var(--muted); margin-top: 5px; }
+.scan-progress-bar { appearance: none; display: block; width: 100%; height: 12px; border: 0; border-radius: 6px; overflow: hidden; background: #dce6d8; accent-color: var(--green); }
+.scan-progress-bar::-webkit-progress-bar { background: #dce6d8; border-radius: 6px; }
+.scan-progress-bar::-webkit-progress-value { background: var(--green); border-radius: 6px; transition: width .2s ease; }
+.scan-progress-bar::-moz-progress-bar { background: var(--green); border-radius: 6px; }
+.scanning .scan-progress-bar:indeterminate { background: linear-gradient(90deg, #dce6d8 25%, #80aa87 50%, #dce6d8 75%); background-size: 200% 100%; animation: scan-progress-wait 1.5s linear infinite; }
+.scanning .scan-progress-bar:indeterminate::-webkit-progress-bar { background: transparent; }
+@keyframes scan-progress-wait { to { background-position: -200% 0; } }
 .scan-status { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; font-size: 12px; }
 .scan-status .text-button { margin-left: auto; }
 .scan-status > .muted { font-size: 10px; }
@@ -122,9 +136,12 @@ main { padding: 38px clamp(22px, 3.4vw, 54px) 110px; min-width: 0; max-width: 19
 .storage-total > span { font-size: 11px; color: var(--muted); }
 .storage-meter { display: flex; width: 100%; height: 20px; border-radius: 5px; background: #e8eddf; overflow: hidden; }
 .storage-segment { flex-basis: 0; min-width: 0; }
-.storage-categories { display: flex; flex-wrap: wrap; gap: 9px 16px; list-style: none; padding: 0; margin: 15px 0 0; font-size: 10px; color: var(--muted); }
-.storage-categories li { display: flex; align-items: baseline; gap: 5px; }
-.storage-categories i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; flex-shrink: 0; }
+.storage-categories { margin: 16px 0 0; }
+.storage-categories th, .storage-categories td { padding: 9px 0; border-top: 0; border-bottom: 1px solid var(--line); background: transparent; color: var(--muted); font-size: 11px; font-weight: 400; letter-spacing: normal; }
+.storage-categories thead th { font-size: 10px; font-weight: 600; }
+.storage-categories th:first-child { padding-right: 16px; white-space: normal; }
+.storage-categories th:last-child, .storage-categories td { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.storage-categories i { display: inline-block; width: 7px; height: 7px; border-radius: 2px; margin-right: 8px; }
 [data-storage="documents"] { background: #e75e5b; }
 [data-storage="applications"] { background: #ee983e; }
 [data-storage="developer"] { background: #ddbf45; }
